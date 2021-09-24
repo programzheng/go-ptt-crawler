@@ -7,14 +7,12 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gocolly/colly/v2"
 )
-
-const PTT_IMAGE_BOARD_HANDLER_CHUNK_SIZE = 10
-const PTT_IMAGE_BOARD_HANDLER_LIMIT_SIZE = 100
 
 func checkFileExist(filePath string) bool {
 	_, err := os.Stat(filePath)
@@ -45,14 +43,18 @@ func writeJsonFile(fileName string, data []string) int {
 }
 
 func pttImageBoardHandler(ctx *gin.Context) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("exit crawl", r)
-		}
-	}()
+	chunkSize, err := strconv.Atoi(ctx.DefaultQuery("chunk_size", "30"))
+	if err != nil {
+		log.Fatalf("chunk size strconv.Atoi failed: %v", err)
+	}
+	limitSize, err := strconv.Atoi(ctx.DefaultQuery("limit_size", "1"))
+	if err != nil {
+		log.Fatalf("limit size strconv.Atoi failed: %v", err)
+	}
 
-	//make a []string slice len is 0 and cap is PTT_IMAGE_BOARD_HANDLER_CHUNK_SIZE
-	images := make([]string, 0, PTT_IMAGE_BOARD_HANDLER_CHUNK_SIZE)
+	//make a []string slice len is 0 and cap is chunkSize
+	images := make([]string, 0, chunkSize)
+	currentImageTotal := 0
 
 	board := ctx.Param("board")
 	titlePrefix := fmt.Sprintf("[%v]", ctx.Query("prefix"))
@@ -60,7 +62,13 @@ func pttImageBoardHandler(ctx *gin.Context) {
 	fileName := fmt.Sprintf("ptt_images_%v_%x.json", board, titlePrefixMd5)
 	baseUrl := "https://www.ptt.cc"
 	url := fmt.Sprintf("/bbs/%v", board)
-	c := colly.NewCollector()
+	c := colly.NewCollector(
+		colly.Async(true),
+	)
+	c.Limit(&colly.LimitRule{
+		DomainGlob:  "*",
+		Parallelism: chunkSize,
+	})
 
 	// Find and visit all article links
 	c.OnHTML("div.r-ent a[href]", func(e *colly.HTMLElement) {
@@ -105,23 +113,25 @@ func pttImageBoardHandler(ctx *gin.Context) {
 
 		//write json
 		if len(images) == cap(images) {
-			currentImageNumber := writeJsonFile(fileName, images)
-			images = make([]string, 0, PTT_IMAGE_BOARD_HANDLER_CHUNK_SIZE)
-			if currentImageNumber >= PTT_IMAGE_BOARD_HANDLER_LIMIT_SIZE {
-				panic("images write json is finish")
-			}
+			currentImageTotal = writeJsonFile(fileName, images)
+			images = make([]string, 0, chunkSize)
 		} else {
 			images = append(images, link)
 		}
 	})
 
 	c.OnRequest(func(r *colly.Request) {
+		if limitSize != -1 && currentImageTotal >= limitSize {
+			r.Abort()
+		}
 		//set cookie
 		r.Headers.Set("Cookie", "over18=1")
 		fmt.Println("Visiting", r.URL)
 	})
 
 	c.Visit(baseUrl + url + "/index.html")
+
+	c.Wait()
 }
 
 func main() {
