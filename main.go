@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gocolly/colly/v2"
-	"github.com/gocolly/colly/v2/debug"
 )
 
 const PTT_IMAGE_BOARD_HANDLER_CHUNK_SIZE = 10
@@ -21,7 +21,7 @@ func checkFileExist(filePath string) bool {
 	return !os.IsNotExist(err)
 }
 
-func writeJsonFile(fileName string, data []string) {
+func writeJsonFile(fileName string, data []string) int {
 	if checkFileExist(fileName) {
 		appendJsonDataByte, err := ioutil.ReadFile(fileName)
 		if err != nil {
@@ -40,26 +40,41 @@ func writeJsonFile(fileName string, data []string) {
 	if err != nil {
 		log.Fatalf("images json data to json file error:\n%v", err)
 	}
+
+	return len(data)
 }
 
 func pttImageBoardHandler(ctx *gin.Context) {
-	var images []string
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("exit crawl", r)
+		}
+	}()
+
+	//make a []string slice len is 0 and cap is PTT_IMAGE_BOARD_HANDLER_CHUNK_SIZE
+	images := make([]string, 0, PTT_IMAGE_BOARD_HANDLER_CHUNK_SIZE)
 
 	board := ctx.Param("board")
-	baseUrl := "https://www.ptt.cc/"
+	titlePrefix := fmt.Sprintf("[%v]", ctx.Query("prefix"))
+	titlePrefixMd5 := md5.Sum([]byte("_" + titlePrefix))
+	fileName := fmt.Sprintf("ptt_images_%v_%x.json", board, titlePrefixMd5)
+	baseUrl := "https://www.ptt.cc"
 	url := fmt.Sprintf("/bbs/%v", board)
-	c := colly.NewCollector(colly.Debugger(&debug.LogDebugger{}))
+	c := colly.NewCollector()
 
 	// Find and visit all article links
 	c.OnHTML("div.r-ent a[href]", func(e *colly.HTMLElement) {
-		//filter 公告
 		text := e.Text
 		link := e.Attr("href")
+
+		//filter text and link
 		if strings.HasPrefix(text, "[公告]") || !strings.HasPrefix(link, url+"/M.") {
 			return
 		}
+		if titlePrefix != "[]" && !strings.HasPrefix(text, titlePrefix) {
 			return
 		}
+
 		articleLink := baseUrl + link
 		e.Request.Visit(articleLink)
 	})
@@ -88,14 +103,13 @@ func pttImageBoardHandler(ctx *gin.Context) {
 			return
 		}
 
-		fmt.Println(link)
 		//write json
-		if len(images) > 0 && len(images)%PTT_IMAGE_BOARD_HANDLER_CHUNK_SIZE == 0 {
-			fmt.Println(images)
-			fileName := fmt.Sprintf("ptt_images_%v.json", board)
-			writeJsonFile(fileName, images)
-		} else if len(images) >= PTT_IMAGE_BOARD_HANDLER_LIMIT_SIZE {
-			panic("Exit")
+		if len(images) == cap(images) {
+			currentImageNumber := writeJsonFile(fileName, images)
+			images = make([]string, 0, PTT_IMAGE_BOARD_HANDLER_CHUNK_SIZE)
+			if currentImageNumber >= PTT_IMAGE_BOARD_HANDLER_LIMIT_SIZE {
+				panic("images write json is finish")
+			}
 		} else {
 			images = append(images, link)
 		}
