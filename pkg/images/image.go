@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
+	"go-ptt-crawler/pkg/aws"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gocolly/colly"
+	"github.com/gocolly/colly/debug"
 )
 
 var JSON_FILE_DATE string = time.Now().Format("2006-01-02")
@@ -24,7 +26,7 @@ func checkFileExist(filePath string) bool {
 func getJsonFileData(fileName string) []string {
 	var oldJsonData []string
 	if checkFileExist(fileName) {
-		oldJsonDataByte, err := ioutil.ReadFile(fileName)
+		oldJsonDataByte, err := ioutil.ReadFile(aws.LambdaTmpDir() + fileName)
 		if err != nil {
 			log.Fatalf("get old images json file data error:\n%v", err)
 		}
@@ -40,7 +42,7 @@ func writeJsonFile(fileName string, data []string) int {
 	if err != nil {
 		log.Fatalf("images to json data error:\n%v", err)
 	}
-	err = ioutil.WriteFile(fileName, jsonData, 0644)
+	err = ioutil.WriteFile(aws.LambdaTmpDir()+fileName, jsonData, 0644)
 	if err != nil {
 		log.Fatalf("images json data to json file error:\n%v", err)
 	}
@@ -58,9 +60,17 @@ func PttImageBoard(board string, titlePrefix string, chunkSize int, limitSize in
 
 	baseUrl := "https://www.ptt.cc"
 	url := fmt.Sprintf("/bbs/%v", board)
+
 	c := colly.NewCollector(
 		colly.Async(true),
 	)
+	if os.Getenv("DEBUG") == "true" {
+		c = colly.NewCollector(
+			colly.Debugger(&debug.LogDebugger{}),
+			colly.Async(true),
+		)
+	}
+
 	c.Limit(&colly.LimitRule{
 		DomainGlob:  "*",
 		Parallelism: chunkSize,
@@ -125,7 +135,7 @@ func PttImageBoard(board string, titlePrefix string, chunkSize int, limitSize in
 		}
 		//set cookie
 		r.Headers.Set("Cookie", "over18=1")
-		fmt.Println("Visiting", r.URL)
+		// fmt.Println("Visiting", r.URL)
 	})
 
 	c.Visit(baseUrl + url + "/index.html")
