@@ -4,13 +4,14 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
-	"go-ptt-crawler/pkg/aws"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/programzheng/go-ptt-crawler/pkg/aws"
 
 	"github.com/gocolly/colly"
 	"github.com/gocolly/colly/debug"
@@ -50,9 +51,7 @@ func writeJsonFile(fileName string, data []string) int {
 	return len(data)
 }
 
-func PttImageBoard(board string, titlePrefix string, chunkSize int, limitSize int) bool {
-	ch := make(chan bool)
-
+func PttImageBoard(board string, titlePrefix string, chunkSize int, limitSize int, write bool) []string {
 	titlePrefixMd5 := md5.Sum([]byte("_" + titlePrefix))
 	fileName := fmt.Sprintf("ptt_images_%v_%x_%v.json", board, titlePrefixMd5, JSON_FILE_DATE)
 
@@ -121,6 +120,9 @@ func PttImageBoard(board string, titlePrefix string, chunkSize int, limitSize in
 
 		//write json
 		if len(images) == cap(images) {
+			if !write {
+				return
+			}
 			if limitSize != -1 && currentImageTotal >= limitSize {
 				return
 			}
@@ -132,6 +134,9 @@ func PttImageBoard(board string, titlePrefix string, chunkSize int, limitSize in
 	})
 
 	c.OnRequest(func(r *colly.Request) {
+		if !write && len(images) == cap(images) {
+			r.Abort()
+		}
 		if limitSize != -1 && currentImageTotal >= limitSize {
 			r.Abort()
 		}
@@ -140,14 +145,15 @@ func PttImageBoard(board string, titlePrefix string, chunkSize int, limitSize in
 		// fmt.Println("Visiting", r.URL)
 	})
 
-	c.OnError(func(r *colly.Response, err error) {
-		ch <- true
+	c.OnResponse(func(r *colly.Response) {
+		fmt.Println("Visited", r.Request.URL)
 	})
 
 	c.Visit(baseUrl + url + "/index.html")
 
 	c.Wait()
-	return <-ch
+
+	return images
 }
 
 func PttRandomImageBoard(board string, titlePrefix string) string {
@@ -155,12 +161,10 @@ func PttRandomImageBoard(board string, titlePrefix string) string {
 	titlePrefixMd5 := md5.Sum([]byte("_" + titlePrefix))
 	fileName := fmt.Sprintf("ptt_images_%v_%x_%v.json", board, titlePrefixMd5, JSON_FILE_DATE)
 	go func() {
-		ch := make(chan bool, 1)
 		oldJsonData := getJsonFileData(fileName)
 		if len(oldJsonData) == 0 {
-			ch <- PttImageBoard(board, titlePrefix, 1, 1)
-			oldJsonData = getJsonFileData(fileName)
-			<-ch
+			oldJsonData = PttImageBoard(board, titlePrefix, 30, 120, false)
+			fmt.Printf("%v\n", oldJsonData)
 		}
 		rand.Seed(time.Now().Unix())
 		resultCh <- oldJsonData[rand.Intn(len(oldJsonData))]

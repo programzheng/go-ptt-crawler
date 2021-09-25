@@ -8,8 +8,8 @@ import (
 	"os"
 	"strconv"
 
-	"go-ptt-crawler/pkg/aws"
-	"go-ptt-crawler/pkg/images"
+	"github.com/programzheng/go-ptt-crawler/pkg/aws"
+	"github.com/programzheng/go-ptt-crawler/pkg/images"
 
 	"github.com/apex/gateway/v2"
 	"github.com/gin-gonic/gin"
@@ -29,7 +29,7 @@ func pttImageBoardHandler(ctx *gin.Context) {
 	board := ctx.Param("board")
 	titlePrefix := fmt.Sprintf("[%v]", ctx.Query("prefix"))
 
-	images.PttImageBoard(board, titlePrefix, chunkSize, limitSize)
+	images.PttImageBoard(board, titlePrefix, chunkSize, limitSize, true)
 
 	ctx.JSON(200, gin.H{
 		"status": "success",
@@ -40,13 +40,6 @@ func pttRandomImageBoardHandler(ctx *gin.Context) {
 	board := ctx.Param("board")
 	titlePrefix := fmt.Sprintf("[%v]", ctx.Query("prefix"))
 	image := images.PttRandomImageBoard(board, titlePrefix)
-	if aws.InLambda() {
-		fmt.Println(image)
-		ctx.JSON(200, gin.H{
-			"image": image,
-		})
-		return
-	}
 
 	response, err := http.Get(image)
 	if err != nil || response.StatusCode != http.StatusOK {
