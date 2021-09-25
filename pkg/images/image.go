@@ -50,7 +50,9 @@ func writeJsonFile(fileName string, data []string) int {
 	return len(data)
 }
 
-func PttImageBoard(board string, titlePrefix string, chunkSize int, limitSize int) {
+func PttImageBoard(board string, titlePrefix string, chunkSize int, limitSize int) bool {
+	ch := make(chan bool)
+
 	titlePrefixMd5 := md5.Sum([]byte("_" + titlePrefix))
 	fileName := fmt.Sprintf("ptt_images_%v_%x_%v.json", board, titlePrefixMd5, JSON_FILE_DATE)
 
@@ -138,9 +140,14 @@ func PttImageBoard(board string, titlePrefix string, chunkSize int, limitSize in
 		// fmt.Println("Visiting", r.URL)
 	})
 
+	c.OnError(func(r *colly.Response, err error) {
+		ch <- true
+	})
+
 	c.Visit(baseUrl + url + "/index.html")
 
 	c.Wait()
+	return <-ch
 }
 
 func PttRandomImageBoard(board string, titlePrefix string) string {
@@ -148,10 +155,12 @@ func PttRandomImageBoard(board string, titlePrefix string) string {
 	titlePrefixMd5 := md5.Sum([]byte("_" + titlePrefix))
 	fileName := fmt.Sprintf("ptt_images_%v_%x_%v.json", board, titlePrefixMd5, JSON_FILE_DATE)
 	go func() {
+		ch := make(chan bool, 1)
 		oldJsonData := getJsonFileData(fileName)
 		if len(oldJsonData) == 0 {
-			PttImageBoard(board, titlePrefix, 50, 1000)
+			ch <- PttImageBoard(board, titlePrefix, 1, 1)
 			oldJsonData = getJsonFileData(fileName)
+			<-ch
 		}
 		rand.Seed(time.Now().Unix())
 		resultCh <- oldJsonData[rand.Intn(len(oldJsonData))]

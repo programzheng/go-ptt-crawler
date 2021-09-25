@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 
 	"go-ptt-crawler/pkg/aws"
@@ -29,12 +30,23 @@ func pttImageBoardHandler(ctx *gin.Context) {
 	titlePrefix := fmt.Sprintf("[%v]", ctx.Query("prefix"))
 
 	images.PttImageBoard(board, titlePrefix, chunkSize, limitSize)
+
+	ctx.JSON(200, gin.H{
+		"status": "success",
+	})
 }
 
 func pttRandomImageBoardHandler(ctx *gin.Context) {
 	board := ctx.Param("board")
 	titlePrefix := fmt.Sprintf("[%v]", ctx.Query("prefix"))
 	image := images.PttRandomImageBoard(board, titlePrefix)
+	if aws.InLambda() {
+		fmt.Println(image)
+		ctx.JSON(200, gin.H{
+			"image": image,
+		})
+		return
+	}
 
 	response, err := http.Get(image)
 	if err != nil || response.StatusCode != http.StatusOK {
@@ -64,11 +76,17 @@ func setupRouter() *gin.Engine {
 }
 
 func main() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	addr := ":" + port
+	log.Println("=======================================")
+	log.Println("Runinng gin-lambda server in " + addr)
+	log.Println("=======================================")
 	if aws.InLambda() {
-		fmt.Println("running aws lambda in aws")
-		log.Fatal(gateway.ListenAndServe(":8080", setupRouter()))
+		log.Fatal(gateway.ListenAndServe(addr, setupRouter()))
 	} else {
-		fmt.Println("running aws lambda in local")
-		log.Fatal(http.ListenAndServe(":8080", setupRouter()))
+		log.Fatal(http.ListenAndServe(addr, setupRouter()))
 	}
 }
