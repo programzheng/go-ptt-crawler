@@ -63,8 +63,8 @@ func setupRouter() *gin.Engine {
 	apiGroup := router.Group("/api/v1")
 	{
 		apiGroup.GET("ptt/image/:board", pttImageBoardHandler)
-		apiGroup.GET("ptt/image/:board/random", pttRandomImageBoardHandler)
 	}
+	router.GET("ptt/image/:board/random", pttRandomImageBoardHandler)
 	return router
 }
 
