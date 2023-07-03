@@ -52,6 +52,16 @@ func writeJsonFile(fileName string, data []string) int {
 	return len(data)
 }
 
+// PttImageBoard is a function for crawling a specific board on PTT.
+// Parameters:
+//
+//	board: The name of the board to crawl.
+//	titlePrefix: The prefix used to filter article titles. It can be an empty string.
+//	chunkSize: The number of articles to request per chunk.
+//	limitSize: The maximum number of articles to crawl.
+//	write: A boolean indicating whether to write the results to a file.
+//
+// Returns: A list of image links crawled.
 func PttImageBoard(board string, titlePrefix string, chunkSize int, limitSize int, write bool) []string {
 	titlePrefixMd5 := md5.Sum([]byte("_" + titlePrefix))
 	fileName := fmt.Sprintf("ptt_images_%v_%x_%v.json", board, titlePrefixMd5, JSON_FILE_DATE)
