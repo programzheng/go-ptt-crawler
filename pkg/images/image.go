@@ -1,11 +1,13 @@
 package images
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -141,7 +143,6 @@ func PttImageBoard(board string, titlePrefix string, chunkSize int, limitSize in
 		}
 		//set cookie
 		r.Headers.Set("Cookie", "over18=1")
-		// fmt.Println("Visiting", r.URL)
 	})
 
 	c.OnResponse(func(r *colly.Response) {
@@ -163,10 +164,33 @@ func PttRandomImageBoard(board string, titlePrefix string) string {
 		oldJsonData := getJsonFileData(fileName)
 		if len(oldJsonData) == 0 {
 			oldJsonData = PttImageBoard(board, titlePrefix, 30, 120, false)
-			fmt.Printf("%v\n", oldJsonData)
 		}
 		rand.Seed(time.Now().Unix())
 		resultCh <- oldJsonData[rand.Intn(len(oldJsonData))]
 	}()
 	return <-resultCh
+}
+
+func GetImageBufferBytesAndContentTypeByUrl(url string) ([]byte, string, error) {
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		log.Printf("getImageBufferBytes url:%s error:%v", url, err)
+		return nil, "", err
+	}
+	req.Header.Set("User-Agent", "")
+
+	response, err := client.Do(req)
+	if err != nil || response.StatusCode != http.StatusOK {
+		log.Printf("getImageBufferBytesAndContentType http get image %s failed statusCode:%d error: %v", url, response.StatusCode, err)
+		return nil, "", err
+	}
+
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(response.Body)
+	reader := response.Body
+	defer reader.Close()
+	contentType := response.Header.Get("Content-Type")
+
+	return buf.Bytes(), contentType, nil
 }

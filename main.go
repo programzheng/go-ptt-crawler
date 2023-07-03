@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"log"
 	"net/http"
@@ -40,21 +39,12 @@ func pttRandomImageBoardHandler(ctx *gin.Context) {
 	board := ctx.Param("board")
 	titlePrefix := fmt.Sprintf("[%v]", ctx.Query("prefix"))
 	image := images.PttRandomImageBoard(board, titlePrefix)
-
-	response, err := http.Get(image)
-	if err != nil || response.StatusCode != http.StatusOK {
-		ctx.Status(http.StatusServiceUnavailable)
-		return
+	bufBytes, contentType, err := images.GetImageBufferBytesAndContentTypeByUrl(image)
+	if err != nil {
+		log.Printf("pttRandomImageBoardHandler images.GetImageBufferBytesAndContentTypeByUrl(%s) error: %v", image, err)
 	}
 
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(response.Body)
-	reader := response.Body
-	defer reader.Close()
-	contentType := response.Header.Get("Content-Type")
-
-	ctx.Data(http.StatusOK, contentType, buf.Bytes())
-	return
+	ctx.Data(http.StatusOK, contentType, bufBytes)
 }
 
 func setupRouter() *gin.Engine {
