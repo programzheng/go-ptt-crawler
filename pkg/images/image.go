@@ -155,10 +155,6 @@ func PttImageBoard(board string, titlePrefix string, chunkSize int, limitSize in
 		r.Headers.Set("Cookie", "over18=1")
 	})
 
-	c.OnResponse(func(r *colly.Response) {
-		fmt.Println("Visited", r.Request.URL)
-	})
-
 	c.Visit(baseUrl + url + "/index.html")
 
 	c.Wait()
