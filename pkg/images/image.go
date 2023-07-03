@@ -4,7 +4,6 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -27,7 +26,7 @@ func checkFileExist(filePath string) bool {
 func getJsonFileData(fileName string) []string {
 	var oldJsonData []string
 	if checkFileExist(fileName) {
-		oldJsonDataByte, err := ioutil.ReadFile(aws.LambdaTmpDir() + fileName)
+		oldJsonDataByte, err := os.ReadFile(aws.LambdaTmpDir() + fileName)
 		if err != nil {
 			log.Fatalf("get old images json file data error:\n%v", err)
 		}
@@ -43,7 +42,7 @@ func writeJsonFile(fileName string, data []string) int {
 	if err != nil {
 		log.Fatalf("images to json data error:\n%v", err)
 	}
-	err = ioutil.WriteFile(aws.LambdaTmpDir()+fileName, jsonData, 0644)
+	err = os.WriteFile(aws.LambdaTmpDir()+fileName, jsonData, 0644)
 	if err != nil {
 		log.Fatalf("images json data to json file error:\n%v", err)
 	}
