@@ -6,7 +6,10 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
+	"time"
 
+	"github.com/go-co-op/gocron"
 	"github.com/programzheng/go-ptt-crawler/pkg/aws"
 	"github.com/programzheng/go-ptt-crawler/pkg/images"
 
@@ -59,6 +62,10 @@ func setupRouter() *gin.Engine {
 }
 
 func main() {
+	if os.Getenv("SCHEDULE") == "true" {
+		runSchedules()
+	}
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -72,4 +79,25 @@ func main() {
 	} else {
 		log.Fatal(http.ListenAndServe(addr, setupRouter()))
 	}
+}
+
+func runSchedules() {
+	s := gocron.NewScheduler(time.Now().Local().Location())
+	job, err := s.Cron("0 0 * * *").Do(func() {
+		scheduleBoards := os.Getenv("SCHEDULE_BOARDS")
+		scheduleBoardLimit, err := strconv.Atoi(os.Getenv("SCHEDULE_BOARD_LIMIT"))
+		if err != nil {
+			log.Printf("scheduleBoard strconv.Atoi(os.Getenv(\"SCHEDULE_BOARD_LIMIT\")) error: %v", err)
+		}
+		if scheduleBoards != "" {
+			for _, board := range strings.Split(scheduleBoards, ",") {
+				images.PttImageBoard(board, "", 1000, scheduleBoardLimit, true)
+				log.Printf("[runSchedules] %s", board)
+			}
+		}
+	}) // every daily
+	if err != nil {
+		job.SingletonMode()
+	}
+	s.StartAsync()
 }
