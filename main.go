@@ -50,6 +50,17 @@ func pttRandomImageBoardHandler(ctx *gin.Context) {
 	ctx.Data(http.StatusOK, contentType, bufBytes)
 }
 
+func pttRandomImageUrlBoardHandler(ctx *gin.Context) {
+	board := ctx.Param("board")
+	titlePrefix := fmt.Sprintf("[%v]", ctx.Query("prefix"))
+	image := images.PttRandomImageBoard(board, titlePrefix)
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"url":    image,
+	})
+}
+
 func setupRouter() *gin.Engine {
 	router := gin.Default()
 	//router
@@ -58,6 +69,7 @@ func setupRouter() *gin.Engine {
 		apiGroup.GET("ptt/image/:board", pttImageBoardHandler)
 	}
 	router.GET("ptt/image/:board/random", pttRandomImageBoardHandler)
+	router.GET("ptt/image_url/:board/random", pttRandomImageUrlBoardHandler)
 	return router
 }
 
